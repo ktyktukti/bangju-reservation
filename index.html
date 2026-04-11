@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>교회 장소 예약</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="app__header">
+        <h1 class="app__title">교회 장소 예약</h1>
+        <p class="app__subtitle">
+          달력에서 월·일 보기를 바꾸고, 화살표로 날짜를 이동할 수 있습니다.
+        </p>
+      </header>
+      <div class="calendar-shell">
+        <div
+          id="calendar"
+          class="cal"
+          role="application"
+          aria-label="예약 달력"
+        ></div>
+      </div>
+    </div>
+
+    <div
+      id="reservation-overlay"
+      class="modal-overlay"
+      hidden
+      aria-hidden="true"
+    >
+      <div
+        class="modal modal--reserve"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reservation-modal-title"
+      >
+        <header class="modal__header">
+          <h2 id="reservation-modal-title" class="modal__title">예약</h2>
+          <button
+            type="button"
+            class="modal__close"
+            id="reservation-close"
+            aria-label="닫기"
+          >
+            ×
+          </button>
+        </header>
+        <form class="modal__form" id="reservation-form" novalidate>
+          <div class="modal__row">
+            <label class="modal__row-label" for="reservation-place">장소</label>
+            <div class="modal__row-control">
+              <select
+                class="modal__input modal__select"
+                id="reservation-place"
+                name="place"
+              >
+                <option value="다목적실">다목적실</option>
+                <option value="유아예배실 1">유아예배실 1</option>
+                <option value="유아예배실 2">유아예배실 2</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal__row">
+            <label class="modal__row-label" for="reservation-date">일자</label>
+            <div class="modal__row-control">
+              <input
+                class="modal__input modal__input--readonly"
+                type="text"
+                id="reservation-date"
+                name="date"
+                readonly
+                tabindex="-1"
+                aria-live="polite"
+              />
+            </div>
+          </div>
+          <div class="modal__row">
+            <span class="modal__row-label" id="reservation-time-label">시간</span>
+            <div class="modal__row-control">
+              <div
+                class="modal__time-pair"
+                role="group"
+                aria-labelledby="reservation-time-label"
+              >
+                <input
+                  type="time"
+                  class="modal__input modal__input--time"
+                  id="reservation-time-start"
+                  name="timeStart"
+                  step="1800"
+                  min="08:00"
+                  max="22:00"
+                  required
+                  aria-label="시작 시간"
+                />
+                <span class="modal__tilde" aria-hidden="true">~</span>
+                <input
+                  type="time"
+                  class="modal__input modal__input--time"
+                  id="reservation-time-end"
+                  name="timeEnd"
+                  step="1800"
+                  min="08:00"
+                  max="22:00"
+                  required
+                  aria-label="종료 시간"
+                />
+              </div>
+            </div>
+          </div>
+          <div class="modal__row">
+            <label class="modal__row-label" for="reservation-name">예약자</label>
+            <div class="modal__row-control">
+              <input
+                class="modal__input"
+                type="text"
+                id="reservation-name"
+                name="name"
+                autocomplete="name"
+                placeholder="이름"
+              />
+            </div>
+          </div>
+          <div class="modal__row">
+            <label class="modal__row-label" for="reservation-affiliation">소속</label>
+            <div class="modal__row-control">
+              <input
+                class="modal__input"
+                type="text"
+                id="reservation-affiliation"
+                name="affiliation"
+                autocomplete="organization"
+                placeholder="예: ○○부 ○셀"
+              />
+            </div>
+          </div>
+          <div class="modal__row">
+            <label class="modal__row-label" for="reservation-phone">연락처</label>
+            <div class="modal__row-control">
+              <input
+                class="modal__input"
+                type="tel"
+                id="reservation-phone"
+                name="phone"
+                autocomplete="tel"
+                placeholder="010-0000-0000"
+              />
+            </div>
+          </div>
+          <div class="modal__field-block">
+            <label class="modal__label" for="reservation-purpose">사용목적</label>
+            <textarea
+              class="modal__input modal__textarea"
+              id="reservation-purpose"
+              name="purpose"
+              rows="4"
+              placeholder="사용 목적을 입력하세요"
+            ></textarea>
+          </div>
+          <footer class="modal__footer modal__footer--split">
+            <button type="submit" class="modal__btn modal__btn--primary modal__btn--flex" id="reservation-submit">
+              예약
+            </button>
+            <button type="button" class="modal__btn modal__btn--secondary modal__btn--flex" id="reservation-cancel">
+              취소
+            </button>
+          </footer>
+        </form>
+      </div>
+    </div>
+
+    <!-- 비밀번호 설정 (예약 확정 직전) -->
+    <div
+      id="password-set-overlay"
+      class="modal-overlay modal-overlay--stack"
+      hidden
+      aria-hidden="true"
+    >
+      <div
+        class="modal modal--password"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="password-set-title"
+      >
+        <header class="modal__header">
+          <h2 id="password-set-title" class="modal__title">비밀번호 설정</h2>
+          <button
+            type="button"
+            class="modal__close"
+            id="password-set-close"
+            aria-label="닫기"
+          >
+            ×
+          </button>
+        </header>
+        <p class="modal__hint">
+          비밀번호를 입력해야 수정 및 삭제가 가능하니 꼭 기억하세요.
+        </p>
+        <form class="modal__form modal__form--password" id="password-set-form" novalidate>
+          <div class="modal__field-block">
+            <label class="modal__label" for="password-set-input">비밀번호</label>
+            <input
+              class="modal__input"
+              type="password"
+              id="password-set-input"
+              name="reservationPassword"
+              autocomplete="new-password"
+              required
+              placeholder="비밀번호 입력"
+            />
+          </div>
+          <footer class="modal__footer modal__footer--split">
+            <button type="submit" class="modal__btn modal__btn--primary modal__btn--flex" id="password-set-submit">
+              확인
+            </button>
+            <button type="button" class="modal__btn modal__btn--secondary modal__btn--flex" id="password-set-cancel">
+              취소
+            </button>
+          </footer>
+        </form>
+      </div>
+    </div>
+
+    <!-- 본인 확인 (수정·삭제 시 — 뼈대, 추후 예약 클릭 시 연결) -->
+    <div
+      id="password-verify-overlay"
+      class="modal-overlay modal-overlay--stack"
+      hidden
+      aria-hidden="true"
+    >
+      <div
+        class="modal modal--password"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="password-verify-title"
+      >
+        <header class="modal__header">
+          <h2 id="password-verify-title" class="modal__title">본인 확인</h2>
+          <button
+            type="button"
+            class="modal__close"
+            id="password-verify-close"
+            aria-label="닫기"
+          >
+            ×
+          </button>
+        </header>
+        <p class="modal__hint">
+          예약을 수정하거나 삭제하려면 예약 시 설정한 비밀번호를 입력하세요.
+        </p>
+        <div class="modal__form modal__form--password">
+          <div class="modal__field-block">
+            <label class="modal__label" for="password-verify-input">비밀번호</label>
+            <input
+              class="modal__input"
+              type="password"
+              id="password-verify-input"
+              name="verifyPassword"
+              autocomplete="current-password"
+              placeholder="비밀번호"
+            />
+          </div>
+          <footer class="modal__footer modal__footer--split">
+            <button type="button" class="modal__btn modal__btn--primary modal__btn--flex" id="password-verify-confirm">
+              확인
+            </button>
+            <button type="button" class="modal__btn modal__btn--secondary modal__btn--flex" id="password-verify-cancel">
+              취소
+            </button>
+          </footer>
+        </div>
+      </div>
+    </div>
+
+    <script src="script.js" defer></script>
+  </body>
+</html>
