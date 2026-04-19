@@ -367,6 +367,10 @@
         const m = plain.match(/^(\d{1,2}):(\d{2})$/)
         return `${pad2(Number(m[1]))}:${m[2]}`
       }
+      if (/^\d{1,2}:\d{2}:\d{2}$/.test(plain)) {
+        const m = plain.match(/^(\d{1,2}):(\d{2}):\d{2}$/)
+        return `${pad2(Number(m[1]))}:${m[2]}`
+      }
       if (/1899-12-30|T\d{2}:\d{2}/i.test(plain)) {
         const d = new Date(plain)
         if (!Number.isNaN(d.getTime()) && d.getFullYear() < 1901) {
@@ -1001,16 +1005,18 @@
 
     const startStr = snapToHalfHourSlot(normalizeTimeStr(r.start))
     inputTimeStart.value = startStr
-    fillReservationEndSelect()
 
-    const endNorm = normalizeTimeStr(detailJson.endTime ?? r.end)
-    if (
-      endNorm &&
-      inputTimeEnd &&
-      [...inputTimeEnd.options].some((o) => o.value === endNorm)
-    ) {
-      inputTimeEnd.value = endNorm
+    /** 달력(doGet displayValues) 기준 종료시간 우선 — getDetail의 시트 Date 직렬화 오류 방지 */
+    const endRaw =
+      r.end ??
+      detailJson.end ??
+      detailJson.endTime ??
+      detailJson['종료시간']
+    let endPreferred = ''
+    if (endRaw != null && String(endRaw).trim() !== '') {
+      endPreferred = snapToHalfHourSlot(normalizeTimeStr(endRaw))
     }
+    fillReservationEndSelect(endPreferred || undefined)
 
     inputName.value = String(detailJson.name ?? '').trim()
     inputAffiliation.value = pickDetailAffiliation(detailJson)
@@ -1139,8 +1145,11 @@
     return (totalMins - DAY_START_MIN) % 30 === 0
   }
 
-  /** 종료만 30분 격자 옵션(시작~최대 MAX_RESERVATION_SPAN · 22:00까지) */
-  function fillReservationEndSelect() {
+  /**
+   * 종료만 30분 격자 옵션(시작~최대 MAX_RESERVATION_SPAN · 22:00까지)
+   * @param {string} [preferredEndHHmm] — 있으면 옵션에 맞을 때 우선 선택(수정 폼 등)
+   */
+  function fillReservationEndSelect(preferredEndHHmm) {
     if (!inputTimeStart || !inputTimeEnd) return
 
     const startStr = snapToHalfHourSlot(inputTimeStart.value)
@@ -1178,8 +1187,14 @@
 
     const preferM = Math.min(startM + 60, maxEndM)
     const preferStr = valueFromMinutes(preferM)
+    const pref =
+      preferredEndHHmm != null && String(preferredEndHHmm).trim() !== ''
+        ? String(preferredEndHHmm).trim()
+        : ''
     let chosen = ''
-    if ([...sel.options].some((o) => o.value === preferStr)) {
+    if (pref && [...sel.options].some((o) => o.value === pref)) {
+      chosen = pref
+    } else if ([...sel.options].some((o) => o.value === preferStr)) {
       chosen = preferStr
     } else if (prev && [...sel.options].some((o) => o.value === prev)) {
       chosen = prev
