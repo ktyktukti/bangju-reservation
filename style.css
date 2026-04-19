@@ -165,32 +165,6 @@ body {
   box-shadow: 0 0 0 3px rgba(0, 100, 0, 0.18);
 }
 
-/* 예약 있음 — 월 보기: 진한 회색 음영 */
-.cal__cell--busy {
-  background: #aeb4bd !important;
-  background-image: none !important;
-}
-
-.cal__cell--busy:hover {
-  background: #a0a7b1 !important;
-}
-
-.cal__cell--busy.cal__cell--muted {
-  background: #c5cad2 !important;
-}
-
-.cal__cell--busy.cal__cell--today {
-  box-shadow: inset 0 0 0 2px rgba(55, 60, 68, 0.55);
-}
-
-.cal__cell--busy .cal__cell-num {
-  color: #2f3439;
-}
-
-.cal__cell--busy.cal__cell--muted .cal__cell-num {
-  color: #4a5056;
-}
-
 /* 일 보기: 해당 시간대 짙은 회색 */
 .cal__slot-body--busy {
   background: #9ea3aa !important;
@@ -387,6 +361,11 @@ body {
   border-right: none;
 }
 
+.cal__weekday--sunday {
+  color: #8f3d48;
+  background: rgba(181, 52, 62, 0.07);
+}
+
 .cal__grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -446,6 +425,32 @@ body {
   background: rgba(0, 100, 0, 0.05);
 }
 
+/* 월 보기 — 주일(일요일) 열 음영 */
+.cal__cell--sunday {
+  background: rgba(181, 52, 62, 0.07);
+}
+
+.cal__cell--sunday:hover {
+  background: rgba(181, 52, 62, 0.11);
+}
+
+.cal__cell--sunday.cal__cell--muted {
+  background: rgba(181, 52, 62, 0.055);
+}
+
+.cal__cell--sunday.cal__cell--muted:hover {
+  background: rgba(181, 52, 62, 0.09);
+}
+
+.cal__cell--sunday.cal__cell--today {
+  background: rgba(181, 52, 62, 0.1);
+  box-shadow: inset 0 0 0 2px var(--green-soft-border);
+}
+
+.cal__cell--sunday.cal__cell--today:hover {
+  background: rgba(181, 52, 62, 0.14);
+}
+
 .cal__cell-inner {
   display: flex;
   flex-direction: column;
@@ -456,7 +461,7 @@ body {
   gap: 0.2rem;
 }
 
-.cal__cell--busy .cal__cell-inner {
+.cal__cell--has-bookings .cal__cell-inner {
   justify-content: space-between;
   min-height: 2.75rem;
 }
@@ -473,10 +478,6 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 100%;
-}
-
-.cal__cell--busy .cal__cell-summary {
-  color: #1f2328;
 }
 
 .cal__cell-num {
@@ -497,10 +498,6 @@ body {
   font-weight: 700;
 }
 
-.cal__cell--busy.cal__cell--today .cal__cell-num {
-  color: #2f3439;
-}
-
 /* 일 보기 */
 .cal__day {
   border: 1px solid var(--cal-border);
@@ -508,6 +505,16 @@ body {
   overflow: hidden;
   background: var(--surface-card);
   box-shadow: var(--shadow-card-inner);
+}
+
+.cal__day-banner {
+  padding: 0.55rem 0.9rem 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #6a3d42;
+  background: rgba(181, 52, 62, 0.08);
+  border-bottom: 1px solid var(--line-softer);
 }
 
 .cal__day-scroll {
@@ -652,6 +659,42 @@ body {
   z-index: 2;
 }
 
+/* 예약 불가 슬롯(기간 밖·과거) — 예약 블록(#7a8088)보다 흐린 음영 */
+.cal__day-ruler-hour.cal__day-slot--blocked,
+.cal__day-hour-empty.cal__day-slot--blocked {
+  background: rgba(200, 204, 210, 0.45);
+  cursor: not-allowed;
+}
+
+.cal__day-hour-empty.cal__day-slot--blocked:hover {
+  background: rgba(188, 192, 198, 0.55);
+}
+
+.cal__day-hour-empty.cal__day-slot--blocked:focus-visible {
+  outline-color: var(--text-tertiary);
+}
+
+/* 월 보기 — 예약 오픈 기간 밖 날짜 */
+.cal__cell--booking-closed {
+  background: rgba(210, 214, 218, 0.42);
+}
+
+.cal__cell--booking-closed.cal__cell--muted {
+  background: rgba(205, 209, 213, 0.38);
+}
+
+.cal__cell--booking-closed.cal__cell--today {
+  box-shadow: inset 0 0 0 2px rgba(176, 184, 176, 0.65);
+}
+
+.cal__cell--booking-closed.cal__cell--sunday {
+  background: rgba(195, 140, 145, 0.22);
+}
+
+.cal__cell--booking-closed.cal__cell--sunday.cal__cell--muted {
+  background: rgba(195, 140, 145, 0.18);
+}
+
 .cal__day-blocks {
   position: absolute;
   inset: 0;
@@ -763,6 +806,10 @@ body {
 .modal--detail {
   width: min(100%, 440px);
   padding-bottom: 0;
+}
+
+.modal--detail-no-delete .modal__footer--detail.modal__footer--split {
+  grid-template-columns: 1fr;
 }
 
 .modal__detail-body {

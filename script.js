@@ -15,6 +15,13 @@
    */
   const MAX_RESERVATION_SPAN_MINUTES = 180
 
+  /**
+   * 예약 오픈 일수: 오늘(Asia/Seoul 달력)을 포함해 며칠간 신청 가능한지.
+   * 예: 14 → 오늘·내일 … 총 14일째 날까지 허용(마지막 날 = 오늘 + 13일).
+   * “2주만 오픈” 같은 정책이 바뀌면 이 숫자만 수정.
+   */
+  const BOOKING_WINDOW_INCLUSIVE_DAYS = 14
+
   /** 구글 Apps Script 웹 앱 (배포 URL) */
   const GAS_URL =
     'https://script.google.com/macros/s/AKfycbzwOLYwcfo74MOJ8mI13sw67X-gWwa6yzQS-7LklBGxqn-pr9I4snlV0PEcSV4biQ65Xg/exec'
@@ -483,6 +490,91 @@
     ).length
   }
 
+  function addCalendarDaysToYmdKey(ymd, deltaDays) {
+    const m = String(ymd).match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    if (!m) return ymd
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+    d.setDate(d.getDate() + deltaDays)
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+  }
+
+  function todayKeySeoul() {
+    return dateKeyFromDate(new Date())
+  }
+
+  function lastBookableDayKeySeoul() {
+    return addCalendarDaysToYmdKey(
+      todayKeySeoul(),
+      BOOKING_WINDOW_INCLUSIVE_DAYS - 1,
+    )
+  }
+
+  function isYmdInBookableWindow(ymd) {
+    const t = todayKeySeoul()
+    const last = lastBookableDayKeySeoul()
+    return ymd >= t && ymd <= last
+  }
+
+  function isDateInBookableWindow(dateObj) {
+    return isYmdInBookableWindow(dateKeyFromDate(dateObj))
+  }
+
+  function currentTotalMinutesSeoul(now) {
+    const d = now instanceof Date ? now : new Date()
+    try {
+      const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Seoul',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).formatToParts(d)
+      const hh = parseInt(
+        parts.find((p) => p.type === 'hour')?.value ?? '0',
+        10,
+      )
+      const mm = parseInt(
+        parts.find((p) => p.type === 'minute')?.value ?? '0',
+        10,
+      )
+      return hh * 60 + mm
+    } catch {
+      return d.getHours() * 60 + d.getMinutes()
+    }
+  }
+
+  /**
+   * 일 보기 빈 슬롯 예약 가능 여부.
+   * @returns {{ ok: true } | { ok: false, reason: 'past' | 'future' }}
+   */
+  function getSlotBookingAvailability(dayDate, slotStartMin) {
+    const dayKey = dateKeyFromDate(startOfDay(dayDate))
+    const nowKey = todayKeySeoul()
+    const lastKey = lastBookableDayKeySeoul()
+
+    if (dayKey < nowKey) return { ok: false, reason: 'past' }
+    if (dayKey > lastKey) return { ok: false, reason: 'future' }
+
+    if (dayKey === nowKey) {
+      const cur = currentTotalMinutesSeoul(new Date())
+      if (slotStartMin < cur) return { ok: false, reason: 'past' }
+    }
+    return { ok: true }
+  }
+
+  /** 종료 시각이 지금(서울)보다 이전이면 삭제 불가 */
+  function isReservationEndedPastNow(r) {
+    if (!r || !r.date || !r.end) return false
+    const dayKey = reservationDateKeyForCompare(r.date)
+    const endM = parseTimeToMinutes(normalizeTimeStr(r.end))
+    if (Number.isNaN(endM)) return false
+    const now = new Date()
+    const nowKey = todayKeySeoul()
+    const cur = currentTotalMinutesSeoul(now)
+    if (dayKey < nowKey) return true
+    if (dayKey > nowKey) return false
+    return endM < cur
+  }
+
   /** yyyy-MM-dd → 로컬 자정 기준 Date */
   function dateFromYmd(dateStr) {
     const m = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})$/)
@@ -608,6 +700,17 @@
     detailDateEl.textContent = formatDateDot(dateFromYmd(r.date))
     detailTimeEl.textContent = `${r.start || '?'} ~ ${r.end || '?'}`
     detailNameEl.textContent = maskNameDisplay(r.nameMasked)
+
+    const pastEnded = isReservationEndedPastNow(r)
+    if (detailBtnDelete) {
+      detailBtnDelete.hidden = pastEnded
+      detailBtnDelete.style.display = pastEnded ? 'none' : ''
+    }
+    const modalDetail = detailOverlay.querySelector('.modal--detail')
+    if (modalDetail) {
+      modalDetail.classList.toggle('modal--detail-no-delete', pastEnded)
+    }
+
     detailOverlay.removeAttribute('hidden')
     detailOverlay.setAttribute('aria-hidden', 'false')
     updateBodyScrollLock()
@@ -959,11 +1062,29 @@
     modalAnchorDate = startOfDay(date)
     inputDate.value = formatDateDot(modalAnchorDate)
 
+    const dayKeyModal = dateKeyFromDate(modalAnchorDate)
+    if (!isYmdInBookableWindow(dayKeyModal)) {
+      alert(
+        `예약은 오늘부터 ${BOOKING_WINDOW_INCLUSIVE_DAYS}일(약 2주) 이내 날짜만 가능합니다.`,
+      )
+      return
+    }
+
     let startTotalMin = 9 * 60
     if (typeof opt.startTotalMin === 'number' && !Number.isNaN(opt.startTotalMin)) {
       startTotalMin = opt.startTotalMin
     } else if (typeof opt.startHour === 'number') {
       startTotalMin = opt.startHour * 60
+    }
+
+    const slotAvail = getSlotBookingAvailability(date, startTotalMin)
+    if (!slotAvail.ok) {
+      alert(
+        slotAvail.reason === 'future'
+          ? `예약은 오늘부터 ${BOOKING_WINDOW_INCLUSIVE_DAYS}일(약 2주) 이내만 가능합니다.`
+          : '이미 지난 일자·시간에는 예약할 수 없습니다.',
+      )
+      return
     }
 
     inputTimeStart.value = snapToHalfHourSlot(valueFromMinutes(startTotalMin))
@@ -1047,6 +1168,13 @@
       const dateIso = dotDateToISO(pendingReservation.일자)
       if (!dateIso) {
         alert('일자 형식이 올바르지 않습니다.')
+        return
+      }
+
+      if (!isYmdInBookableWindow(dateIso)) {
+        alert(
+          `예약 가능 기간이 아닙니다. 오늘부터 ${BOOKING_WINDOW_INCLUSIVE_DAYS}일(약 2주) 이내만 선택해 주세요.`,
+        )
         return
       }
 
@@ -1254,6 +1382,23 @@
       if (spanM > MAX_RESERVATION_SPAN_MINUTES) {
         alert(
           `예약 시간은 시작부터 최대 ${maxReservationSpanLabelKo()}까지 선택할 수 있습니다.`,
+        )
+        return
+      }
+
+      const isoCheck = dotDateToISO(inputDate.value)
+      if (!isoCheck || !isYmdInBookableWindow(isoCheck)) {
+        alert(
+          `예약 가능 기간이 아닙니다. 오늘부터 ${BOOKING_WINDOW_INCLUSIVE_DAYS}일(약 2주) 이내만 선택해 주세요.`,
+        )
+        return
+      }
+      const slotCk = getSlotBookingAvailability(modalAnchorDate, startM)
+      if (!slotCk.ok) {
+        alert(
+          slotCk.reason === 'future'
+            ? `예약은 오늘부터 ${BOOKING_WINDOW_INCLUSIVE_DAYS}일(약 2주) 이내만 가능합니다.`
+            : '이미 지난 일자·시간에는 예약할 수 없습니다.',
         )
         return
       }
@@ -1528,9 +1673,10 @@
 
     const head = document.createElement('div')
     head.className = 'cal__weekdays'
-    WEEKDAYS.forEach((name) => {
+    WEEKDAYS.forEach((name, idx) => {
       const th = document.createElement('div')
       th.className = 'cal__weekday'
+      if (idx === 0) th.classList.add('cal__weekday--sunday')
       th.textContent = name
       head.appendChild(th)
     })
@@ -1546,13 +1692,18 @@
       cell.className = 'cal__cell'
       if (!inMonth) cell.classList.add('cal__cell--muted')
       if (isToday) cell.classList.add('cal__cell--today')
+      if (date.getDay() === 0) cell.classList.add('cal__cell--sunday')
 
       const n = inMonth
         ? countReservationsForPlaceAndDate(date, state.selectedPlace)
         : 0
 
+      if (inMonth && !isDateInBookableWindow(date)) {
+        cell.classList.add('cal__cell--booking-closed')
+      }
+
       if (inMonth && n > 0) {
-        cell.classList.add('cal__cell--busy')
+        cell.classList.add('cal__cell--has-bookings')
         cell.setAttribute(
           'title',
           `예약 ${n}건 · 클릭하면 이 날짜 일 보기`,
@@ -1560,6 +1711,7 @@
       } else {
         cell.setAttribute('title', '클릭하면 이 날짜 일 보기')
       }
+
 
       const inner = document.createElement('div')
       inner.className = 'cal__cell-inner'
@@ -1594,6 +1746,11 @@
     const wrap = document.createElement('div')
     wrap.className = 'cal__day'
 
+    const banner = document.createElement('div')
+    banner.className = 'cal__day-banner'
+    banner.setAttribute('role', 'note')
+    banner.textContent = `현재일 기준 ${BOOKING_WINDOW_INCLUSIVE_DAYS}일(약 2주) 이내만 예약할 수 있습니다.`
+
     const scroll = document.createElement('div')
     scroll.className = 'cal__day-scroll'
 
@@ -1613,16 +1770,6 @@
 
     const ruler = document.createElement('div')
     ruler.className = 'cal__day-ruler'
-    for (
-      let m = DAY_START_MIN;
-      m < DAY_END_MIN;
-      m += DAY_VIEW_SLOT_STEP_MIN
-    ) {
-      const lab = document.createElement('div')
-      lab.className = 'cal__day-ruler-hour'
-      lab.textContent = valueFromMinutes(m)
-      ruler.appendChild(lab)
-    }
 
     const track = document.createElement('div')
     track.className = 'cal__day-track'
@@ -1634,13 +1781,35 @@
       m < DAY_END_MIN;
       m += DAY_VIEW_SLOT_STEP_MIN
     ) {
+      const avail = getSlotBookingAvailability(curDay, m)
+      const blocked = !avail.ok
+
+      const lab = document.createElement('div')
+      lab.className = 'cal__day-ruler-hour'
+      if (blocked) lab.classList.add('cal__day-slot--blocked')
+      lab.textContent = valueFromMinutes(m)
+      ruler.appendChild(lab)
+
       const slot = document.createElement('button')
       slot.type = 'button'
       slot.className = 'cal__day-hour-empty'
+      if (blocked) slot.classList.add('cal__day-slot--blocked')
       slot.dataset.startMin = String(m)
       const label = valueFromMinutes(m)
-      slot.setAttribute('aria-label', `${label} 새 예약`)
+      slot.setAttribute(
+        'aria-label',
+        blocked ? `${label} 예약 불가` : `${label} 새 예약`,
+      )
       slot.addEventListener('click', () => {
+        const ck = getSlotBookingAvailability(curDay, m)
+        if (!ck.ok) {
+          alert(
+            ck.reason === 'future'
+              ? `예약은 오늘부터 ${BOOKING_WINDOW_INCLUSIVE_DAYS}일(약 2주) 이내만 가능합니다.`
+              : '이미 지난 일자·시간에는 예약할 수 없습니다.',
+          )
+          return
+        }
         state.cursor = startOfDay(state.cursor)
         openReservationModal(state.cursor, { startTotalMin: m })
       })
@@ -1679,7 +1848,7 @@
     track.append(hoursBg, blocksLayer)
     pane.append(ruler, track)
     scroll.appendChild(pane)
-    wrap.appendChild(scroll)
+    wrap.append(banner, scroll)
     return wrap
   }
 
