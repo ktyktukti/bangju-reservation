@@ -235,6 +235,7 @@
   const detailTimeEl = document.getElementById('reservation-detail-time')
   const detailNameEl = document.getElementById('reservation-detail-name')
   const detailBtnView = document.getElementById('reservation-detail-action-view')
+  const detailBtnEdit = document.getElementById('reservation-detail-action-edit')
   const detailBtnDelete = document.getElementById('reservation-detail-action-delete')
   const detailFullOverlay = document.getElementById('reservation-detail-full-overlay')
   const detailFullClose = document.getElementById('reservation-detail-full-close')
@@ -263,6 +264,11 @@
 
   /** 달력 블록 클릭 시 열린 예약 (상세조회·삭제) */
   let detailReservationSelected = null
+
+  /** `예약` 폼: 신규 예약 또는 수정 */
+  let reservationFormMode = 'create'
+  /** 수정 저장 시 서버 검증용 `{ id, password }` */
+  let editSubmitContext = null
 
   function isAnyModalOpen() {
     const res = overlay && !overlay.hasAttribute('hidden')
@@ -604,6 +610,50 @@
       .replace(/"/g, '&quot;')
   }
 
+  /** 시트에서 온 연락처 표시용(선행 ') 제거 */
+  function stripSheetPhoneDisplay(v) {
+    let s = String(v ?? '').trim()
+    if (s.startsWith("'")) s = s.slice(1)
+    return s
+  }
+
+  /** getDetail JSON에서 소속 필드 (`group` / `소속` 등) */
+  function pickDetailAffiliation(obj) {
+    if (!obj || typeof obj !== 'object') return ''
+    const v =
+      obj.group ??
+      obj.소속 ??
+      obj.affiliation ??
+      obj.groupName
+    return String(v ?? '').trim()
+  }
+
+  function ensureReservationModalDefaultsStored() {
+    const titleEl = document.getElementById('reservation-modal-title')
+    const submitBtn = document.getElementById('reservation-submit')
+    if (titleEl && !titleEl.dataset.defaultTitle) {
+      titleEl.dataset.defaultTitle = titleEl.textContent.trim()
+    }
+    if (submitBtn && !submitBtn.dataset.defaultLabel) {
+      submitBtn.dataset.defaultLabel = submitBtn.textContent.trim()
+    }
+  }
+
+  function resetReservationModalToCreate() {
+    reservationFormMode = 'create'
+    editSubmitContext = null
+    if (selectPlace) selectPlace.disabled = false
+    ensureReservationModalDefaultsStored()
+    const titleEl = document.getElementById('reservation-modal-title')
+    const submitBtn = document.getElementById('reservation-submit')
+    if (titleEl?.dataset.defaultTitle) {
+      titleEl.textContent = titleEl.dataset.defaultTitle
+    }
+    if (submitBtn?.dataset.defaultLabel) {
+      submitBtn.textContent = submitBtn.dataset.defaultLabel
+    }
+  }
+
   /**
    * 상세조회 응답에 달력에서 선택한 행을 합쳐 장소·예약일·예약시간을 반드시 채움.
    * 예약일은 yyyy-MM-dd면 점 형식으로 표시용 변환.
@@ -705,6 +755,10 @@
     if (detailBtnDelete) {
       detailBtnDelete.hidden = pastEnded
       detailBtnDelete.style.display = pastEnded ? 'none' : ''
+    }
+    if (detailBtnEdit) {
+      detailBtnEdit.hidden = pastEnded
+      detailBtnEdit.style.display = pastEnded ? 'none' : ''
     }
     const modalDetail = detailOverlay.querySelector('.modal--detail')
     if (modalDetail) {
@@ -868,6 +922,107 @@
     } finally {
       showGasLoading(false)
     }
+  }
+
+  /**
+   * 수정 폼용: 비밀번호 확인 후 상세(JSON)를 받아 편집 모달을 연다.
+   * @param {string} plainPassword
+   */
+  async function requestReservationDetailThenOpenEdit(plainPassword) {
+    const r = detailReservationSelected
+    if (!r) return
+    showGasLoading(true)
+    try {
+      const text = await postGasReservationAction({
+        mode: 'getDetail',
+        id: r.id,
+        password: plainPassword,
+      })
+      if (text === 'AuthFail') {
+        alert('비밀번호가 일치하지 않습니다.')
+        return
+      }
+      if (text.startsWith('Error:') || text.startsWith('Unauthorized')) {
+        alert(text)
+        return
+      }
+      let detailJson
+      try {
+        detailJson = JSON.parse(text)
+      } catch {
+        alert('예약 정보를 불러오지 못했습니다.')
+        return
+      }
+      openReservationEditModal(plainPassword, detailJson)
+    } catch (err) {
+      console.error(err)
+      alert('예약 정보를 불러오지 못했습니다.')
+    } finally {
+      showGasLoading(false)
+    }
+  }
+
+  /**
+   * 장소·일자·시작 시간 고정, 종료·예약자·소속·연락처·목적 수정 가능.
+   * @param {string} plainPassword
+   * @param {{ name?: string, phone?: string, purpose?: string, group?: string }} detailJson
+   */
+  function openReservationEditModal(plainPassword, detailJson) {
+    const r = detailReservationSelected
+    if (
+      !r ||
+      !overlay ||
+      !inputDate ||
+      !inputTimeStart ||
+      !inputTimeEnd ||
+      !inputName ||
+      !inputPurpose ||
+      !selectPlace ||
+      !inputAffiliation ||
+      !inputPhone
+    ) {
+      return
+    }
+
+    ensureReservationModalDefaultsStored()
+    reservationFormMode = 'edit'
+    editSubmitContext = { id: r.id, password: plainPassword }
+
+    const titleEl = document.getElementById('reservation-modal-title')
+    const submitBtn = document.getElementById('reservation-submit')
+    if (titleEl) titleEl.textContent = '예약 수정'
+    if (submitBtn) submitBtn.textContent = '저장'
+
+    selectPlace.value = r.place
+    selectPlace.disabled = true
+
+    modalAnchorDate = dateFromYmd(r.date)
+    inputDate.value = formatDateDot(modalAnchorDate)
+
+    const startStr = snapToHalfHourSlot(normalizeTimeStr(r.start))
+    inputTimeStart.value = startStr
+    fillReservationEndSelect()
+
+    const endNorm = normalizeTimeStr(detailJson.endTime ?? r.end)
+    if (
+      endNorm &&
+      inputTimeEnd &&
+      [...inputTimeEnd.options].some((o) => o.value === endNorm)
+    ) {
+      inputTimeEnd.value = endNorm
+    }
+
+    inputName.value = String(detailJson.name ?? '').trim()
+    inputAffiliation.value = pickDetailAffiliation(detailJson)
+    inputPhone.value = stripSheetPhoneDisplay(detailJson.phone)
+    inputPurpose.value = String(detailJson.purpose ?? '').trim()
+
+    closeReservationDetailModal()
+
+    overlay.removeAttribute('hidden')
+    overlay.setAttribute('aria-hidden', 'false')
+    updateBodyScrollLock()
+    inputTimeEnd.focus()
   }
 
   async function requestReservationCancel(plainPassword) {
@@ -1058,6 +1213,8 @@
       return
     }
 
+    resetReservationModalToCreate()
+
     const opt = opts || {}
     modalAnchorDate = startOfDay(date)
     inputDate.value = formatDateDot(modalAnchorDate)
@@ -1114,6 +1271,7 @@
     overlay.setAttribute('hidden', '')
     overlay.setAttribute('aria-hidden', 'true')
     pendingReservation = null
+    resetReservationModalToCreate()
     enableReservationSubmit()
     resetPasswordSubmitButton()
     updateBodyScrollLock()
@@ -1259,6 +1417,99 @@
     }
   }
 
+  async function submitReservationUpdate(ts, te) {
+    const ctx = editSubmitContext
+    if (!ctx?.id || ctx.password == null) {
+      alert('수정 세션이 만료되었습니다. 다시 시도해 주세요.')
+      return
+    }
+
+    showGasLoading(true)
+    const btnRes = document.getElementById('reservation-submit')
+    const saveLabel =
+      reservationFormMode === 'edit'
+        ? '저장'
+        : btnRes?.dataset.defaultLabel || '예약'
+    if (btnRes) {
+      btnRes.disabled = true
+      btnRes.textContent = '처리 중...'
+    }
+
+    try {
+      const params = new URLSearchParams()
+      params.set('mode', 'update')
+      params.set('id', ctx.id)
+      params.set('password', ctx.password)
+      params.set('endTime', te)
+      params.set('name', inputName.value.trim())
+      params.set('group', inputAffiliation.value.trim())
+      params.set('phone', inputPhone.value.trim())
+      params.set('purpose', inputPurpose.value.trim())
+
+      let text
+      try {
+        text = await gasFetchPost(params)
+      } catch (fetchErr) {
+        console.error(fetchErr)
+        if (isLikelyFetchBlockedError(fetchErr)) {
+          gasSubmitViaHtmlForm(GAS_URL, params)
+          closeReservationModal()
+          void fetchSheetReservations().then(() => render())
+          setTimeout(() => {
+            void fetchSheetReservations().then(() => render())
+          }, 2000)
+          alert(
+            '브라우저에서 서버 응답을 받지 못했습니다. 전송은 시도되었으니 목록을 새로 고칩니다.',
+          )
+          return
+        }
+        alert(
+          `서버와 통신할 수 없습니다.\n(${fetchErr && fetchErr.message ? fetchErr.message : '네트워크 오류'})\n\n구글 시트 웹앱 배포 URL·CORS 설정을 확인해 주세요.`,
+        )
+        return
+      }
+
+      if (text === 'UpdateSuccess') {
+        closeReservationModal()
+        await fetchSheetReservations()
+        render()
+        alert('예약이 수정되었습니다.')
+        return
+      }
+
+      if (text === 'Conflict') {
+        alert(
+          '해당 장소·날짜·시간에 이미 예약이 있습니다.\n종료 시간을 조정해 주세요.',
+        )
+        return
+      }
+
+      if (text === 'AuthFail') {
+        alert('비밀번호가 일치하지 않습니다.')
+        return
+      }
+
+      if (text.startsWith('Error:')) {
+        alert(text)
+        return
+      }
+
+      alert(`수정에 실패했습니다.\n(${text})`)
+    } catch (err) {
+      console.error(err)
+      alert(
+        `서버와 통신할 수 없습니다.\n(${err && err.message ? err.message : '네트워크 오류'})`,
+      )
+    } finally {
+      showGasLoading(false)
+      if (btnRes) {
+        btnRes.disabled = false
+        btnRes.textContent = saveLabel
+      }
+      enableReservationSubmit()
+    }
+  }
+
   /**
    * 수정·삭제 전 본인 확인 모달을 연다. (예약 항목 클릭 시 이어 붙이면 됨)
    * @param {string} expectedPassword - 해당 예약에 저장된 비밀번호(클라이언트 임시 저장분)
@@ -1383,6 +1634,17 @@
         alert(
           `예약 시간은 시작부터 최대 ${maxReservationSpanLabelKo()}까지 선택할 수 있습니다.`,
         )
+        return
+      }
+
+      if (reservationFormMode === 'edit') {
+        const isoEdit = dotDateToISO(inputDate.value)
+        if (!isoEdit) {
+          alert('일자 형식이 올바르지 않습니다.')
+          return
+        }
+        disableReservationSubmit()
+        void submitReservationUpdate(ts, te)
         return
       }
 
@@ -1511,6 +1773,20 @@
           {
             onVerified: (pwd) => {
               void requestReservationCancel(pwd)
+            },
+          },
+          { serverOnly: true },
+        )
+      })
+    }
+    if (detailBtnEdit) {
+      detailBtnEdit.addEventListener('click', () => {
+        if (!detailReservationSelected) return
+        openPasswordVerifyModal(
+          '',
+          {
+            onVerified: (pwd) => {
+              void requestReservationDetailThenOpenEdit(pwd)
             },
           },
           { serverOnly: true },
