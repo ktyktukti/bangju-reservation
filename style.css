@@ -125,6 +125,149 @@ body {
   gap: 0.45rem;
 }
 
+.cal__toolbar-place {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  flex: 1 1 auto;
+  justify-content: center;
+  min-width: 0;
+}
+
+.cal__place-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.cal__select {
+  appearance: none;
+  cursor: pointer;
+  border: 1px solid rgba(0, 100, 0, 0.28);
+  background: var(--surface-card);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23006400' d='M1.41 0 6 4.58 10.59 0 12 1.41l-6 6-6-6z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.65rem center;
+  padding: 0.42rem 2rem 0.42rem 0.75rem;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--green-deep);
+  max-width: 100%;
+}
+
+.cal__select:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 100, 0, 0.18);
+}
+
+/* 예약 있음 — 월 보기: 진한 회색 음영 */
+.cal__cell--busy {
+  background: #aeb4bd !important;
+  background-image: none !important;
+}
+
+.cal__cell--busy:hover {
+  background: #a0a7b1 !important;
+}
+
+.cal__cell--busy.cal__cell--muted {
+  background: #c5cad2 !important;
+}
+
+.cal__cell--busy.cal__cell--today {
+  box-shadow: inset 0 0 0 2px rgba(55, 60, 68, 0.55);
+}
+
+.cal__cell--busy .cal__cell-num {
+  color: #2f3439;
+}
+
+.cal__cell--busy.cal__cell--muted .cal__cell-num {
+  color: #4a5056;
+}
+
+/* 일 보기: 해당 시간대 짙은 회색 */
+.cal__slot-body--busy {
+  background: #9ea3aa !important;
+  background-image: none !important;
+}
+
+.cal__slot-body--busy:hover {
+  background: #91969e !important;
+}
+
+.cal__slot--busy .cal__slot-label {
+  background: #e2e4e7;
+  color: #4a5056;
+}
+
+/* 서버 통신 로딩 */
+.gas-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: all;
+}
+
+.gas-loading[hidden] {
+  display: none;
+}
+
+.gas-loading__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(28, 31, 28, 0.35);
+  backdrop-filter: blur(4px);
+}
+
+.gas-loading__box {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem 2rem;
+  background: var(--surface-card);
+  border-radius: 14px;
+  box-shadow: var(--shadow-float);
+  border: 1px solid var(--line-softer);
+}
+
+.gas-loading__spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #e4e6e4;
+  border-top-color: var(--green-deep);
+  border-radius: 50%;
+  animation: gas-spin 0.75s linear infinite;
+}
+
+@keyframes gas-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.gas-loading__text {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.modal__btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .cal__title {
   margin: 0;
   flex: 1 1 200px;
@@ -140,6 +283,12 @@ body {
   .cal__title {
     order: 2;
     flex-basis: 100%;
+  }
+
+  .cal__toolbar-place {
+    flex-basis: 100%;
+    order: 3;
+    justify-content: flex-start;
   }
 }
 
@@ -254,10 +403,10 @@ body {
   border-bottom: 1px solid var(--line-softer);
   background: var(--surface-card);
   cursor: pointer;
-  /* 숫자: 우측 상단 정렬 */
   display: flex;
-  justify-content: flex-end;
-  align-items: flex-start;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
   padding: 0.85rem 1rem 1rem;
   font: inherit;
   color: var(--text-primary);
@@ -297,6 +446,39 @@ body {
   background: rgba(0, 100, 0, 0.05);
 }
 
+.cal__cell-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  width: 100%;
+  min-height: 100%;
+  flex: 1;
+  gap: 0.2rem;
+}
+
+.cal__cell--busy .cal__cell-inner {
+  justify-content: space-between;
+  min-height: 2.75rem;
+}
+
+.cal__cell-summary {
+  align-self: stretch;
+  margin-top: auto;
+  text-align: left;
+  font-size: clamp(0.62rem, 2.4vw, 0.72rem);
+  font-weight: 700;
+  color: #5a5f66;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.cal__cell--busy .cal__cell-summary {
+  color: #1f2328;
+}
+
 .cal__cell-num {
   font-weight: 700;
   font-size: 0.78rem;
@@ -313,6 +495,10 @@ body {
 .cal__cell--today .cal__cell-num {
   color: var(--green-deep);
   font-weight: 700;
+}
+
+.cal__cell--busy.cal__cell--today .cal__cell-num {
+  color: #2f3439;
 }
 
 /* 일 보기 */
@@ -391,6 +577,144 @@ body {
   z-index: 1;
 }
 
+/* 일 보기 — 시간축 + 예약 블록 */
+.cal__day-pane {
+  display: grid;
+  grid-template-columns: 4.25rem 1fr;
+  align-items: stretch;
+  min-width: 0;
+  min-height: min(560px, 62vh);
+}
+
+.cal__day-ruler {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--line-softer);
+  background: var(--surface-subtle);
+}
+
+.cal__day-ruler-hour {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 0.35rem 0.55rem 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--line-softer);
+}
+
+.cal__day-ruler-hour:last-child {
+  border-bottom: none;
+}
+
+.cal__day-track {
+  position: relative;
+  min-height: min(560px, 62vh);
+  flex: 1;
+  min-width: 0;
+  isolation: isolate;
+}
+
+.cal__day-hours-bg {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  z-index: 2;
+}
+
+.cal__day-hour-empty {
+  flex: 1 1 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-bottom: 1px solid var(--line-softer);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.cal__day-hour-empty:last-child {
+  border-bottom: none;
+}
+
+.cal__day-hour-empty:hover {
+  background: rgba(0, 100, 0, 0.05);
+}
+
+.cal__day-hour-empty:focus-visible {
+  outline: 2px solid var(--green-deep);
+  outline-offset: -2px;
+  z-index: 2;
+}
+
+.cal__day-blocks {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.cal__res-block {
+  position: absolute;
+  margin: 0;
+  padding: 0.3rem 0.4rem;
+  border: none;
+  border-radius: 8px;
+  background: rgba(120, 128, 138, 0.92);
+  color: #fff;
+  font: inherit;
+  font-size: clamp(0.68rem, 2.6vw, 0.78rem);
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow:
+    inset 0 0 0 1px rgba(48, 52, 58, 0.28),
+    0 1px 3px rgba(28, 31, 28, 0.18);
+  transition:
+    background 0.15s ease,
+    transform 0.1s ease;
+  min-height: 1.5rem;
+  overflow: hidden;
+}
+
+.cal__res-block:hover {
+  background: rgba(106, 114, 124, 0.96);
+}
+
+.cal__res-block:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+  z-index: 4;
+}
+
+.cal__res-block-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 380px) {
+  .cal__day-pane {
+    grid-template-columns: 3.35rem 1fr;
+  }
+
+  .cal__day-ruler-hour {
+    font-size: 0.72rem;
+    padding-left: 0.35rem;
+    padding-right: 0.35rem;
+  }
+}
+
 /* ----- 예약 모달 ----- */
 .modal-overlay {
   position: fixed;
@@ -409,10 +733,88 @@ body {
   display: none;
 }
 
+/* 예약 조회 (달력 블록) — 예약 입력(1000)보다 위, 비밀번호(1100)보다 아래 */
+.modal-overlay--detail {
+  z-index: 1050;
+}
+
+/* 비밀번호 검증 후 상세 JSON */
+.modal-overlay--detail-full {
+  z-index: 1070;
+}
+
+.modal__detail-body--scroll {
+  max-height: min(52vh, 420px);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.modal--detail-full {
+  width: min(100%, 480px);
+  padding-bottom: 0;
+}
+
 /* 예약 위에 겹치는 보조 모달 */
 .modal-overlay--stack {
   z-index: 1100;
   align-items: center;
+}
+
+.modal--detail {
+  width: min(100%, 440px);
+  padding-bottom: 0;
+}
+
+.modal__detail-body {
+  padding: 0.25rem 0 0.75rem;
+}
+
+.modal__detail-list {
+  margin: 0;
+}
+
+.modal__detail-row {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr;
+  gap: 0.5rem 0.85rem;
+  align-items: baseline;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--line-softer);
+  font-size: 0.9rem;
+}
+
+.modal__detail-row:last-child {
+  border-bottom: none;
+}
+
+.modal__detail-row dt {
+  margin: 0;
+  font-weight: 700;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  letter-spacing: -0.02em;
+}
+
+.modal__detail-row dd {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-primary);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.modal__footer--detail {
+  margin-top: 0.35rem;
+}
+
+.modal__btn--danger-outline {
+  border: 1px solid #b3261e;
+  color: #b3261e;
+  background: #fff;
+}
+
+.modal__btn--danger-outline:hover {
+  background: rgba(179, 38, 30, 0.06);
 }
 
 .modal {
@@ -548,15 +950,42 @@ body {
   width: 100%;
 }
 
+.modal__time-hint {
+  margin: 0.4rem 0 0;
+  width: 100%;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--text-tertiary);
+}
+
 .modal__time-pair .modal__select,
 .modal__time-pair .modal__input--time {
   flex: 1;
   min-width: 0;
 }
 
+.modal__time-pair .modal__select--time-end {
+  font-variant-numeric: tabular-nums;
+}
+
 /* type="time": 모바일은 OS 휠/시트 피커, 데스크톱은 브라우저 UI */
 .modal__input--time {
   font-variant-numeric: tabular-nums;
+}
+
+/* 읽기 전용 시작 시간 — 시계 아이콘·클릭으로 조정 막기 */
+.modal__input--time.modal__input--readonly {
+  cursor: default;
+  color: var(--text-secondary);
+}
+
+.modal__input--time.modal__input--readonly::-webkit-calendar-picker-indicator {
+  opacity: 0;
+  width: 0;
+  margin: 0;
+  padding: 0;
+  pointer-events: none;
 }
 
 .modal__input--time::-webkit-calendar-picker-indicator {

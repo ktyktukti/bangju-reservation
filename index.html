@@ -95,28 +95,27 @@
               >
                 <input
                   type="time"
-                  class="modal__input modal__input--time"
+                  class="modal__input modal__input--time modal__input--readonly"
                   id="reservation-time-start"
                   name="timeStart"
                   step="1800"
                   min="08:00"
                   max="22:00"
                   required
-                  aria-label="시작 시간"
+                  readonly
+                  tabindex="-1"
+                  aria-label="시작 시간 (달력에서 선택한 시간, 변경 불가)"
                 />
                 <span class="modal__tilde" aria-hidden="true">~</span>
-                <input
-                  type="time"
-                  class="modal__input modal__input--time"
+                <select
+                  class="modal__input modal__select modal__select--time-end"
                   id="reservation-time-end"
                   name="timeEnd"
-                  step="1800"
-                  min="08:00"
-                  max="22:00"
                   required
-                  aria-label="종료 시간"
-                />
+                  aria-label="종료 시간 (30분 단위)"
+                ></select>
               </div>
+              <p class="modal__time-hint" id="reservation-time-hint"></p>
             </div>
           </div>
           <div class="modal__row">
@@ -283,6 +282,127 @@
       </div>
     </div>
 
-    <script src="script.js" defer></script>
+    <!-- 예약 조회 (달력 블록 클릭 — 읽기 전용) -->
+    <div
+      id="reservation-detail-overlay"
+      class="modal-overlay modal-overlay--detail"
+      hidden
+      aria-hidden="true"
+    >
+      <div
+        class="modal modal--detail"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reservation-detail-title"
+      >
+        <header class="modal__header">
+          <h2 id="reservation-detail-title" class="modal__title">예약 조회</h2>
+          <button
+            type="button"
+            class="modal__close"
+            id="reservation-detail-close"
+            aria-label="닫기"
+          >
+            ×
+          </button>
+        </header>
+        <div class="modal__detail-body">
+          <dl class="modal__detail-list">
+            <div class="modal__detail-row">
+              <dt>장소</dt>
+              <dd id="reservation-detail-place"></dd>
+            </div>
+            <div class="modal__detail-row">
+              <dt>일자</dt>
+              <dd id="reservation-detail-date"></dd>
+            </div>
+            <div class="modal__detail-row">
+              <dt>시간</dt>
+              <dd id="reservation-detail-time"></dd>
+            </div>
+            <div class="modal__detail-row">
+              <dt>예약자</dt>
+              <dd id="reservation-detail-name"></dd>
+            </div>
+          </dl>
+        </div>
+        <footer class="modal__footer modal__footer--split modal__footer--detail">
+          <button
+            type="button"
+            class="modal__btn modal__btn--primary modal__btn--flex"
+            id="reservation-detail-action-view"
+          >
+            상세조회
+          </button>
+          <button
+            type="button"
+            class="modal__btn modal__btn--danger-outline modal__btn--flex"
+            id="reservation-detail-action-delete"
+          >
+            삭제
+          </button>
+        </footer>
+      </div>
+    </div>
+
+    <!-- 비밀번호 확인 후 서버 상세(JSON) 표시 -->
+    <div
+      id="reservation-detail-full-overlay"
+      class="modal-overlay modal-overlay--detail-full"
+      hidden
+      aria-hidden="true"
+    >
+      <div
+        class="modal modal--detail-full"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reservation-detail-full-title"
+      >
+        <header class="modal__header">
+          <h2 id="reservation-detail-full-title" class="modal__title">
+            예약 상세
+          </h2>
+          <button
+            type="button"
+            class="modal__close"
+            id="reservation-detail-full-close"
+            aria-label="닫기"
+          >
+            ×
+          </button>
+        </header>
+        <div class="modal__detail-body modal__detail-body--scroll">
+          <div
+            id="reservation-detail-full-list"
+            class="modal__detail-list"
+          ></div>
+        </div>
+        <footer class="modal__footer modal__footer--detail">
+          <button
+            type="button"
+            class="modal__btn modal__btn--primary modal__btn--flex"
+            id="reservation-detail-full-ok"
+          >
+            확인
+          </button>
+        </footer>
+      </div>
+    </div>
+
+    <div
+      id="gas-loading-overlay"
+      class="gas-loading"
+      hidden
+      aria-hidden="true"
+      aria-live="polite"
+    >
+      <div class="gas-loading__backdrop"></div>
+      <div class="gas-loading__box">
+        <span class="gas-loading__spinner" aria-hidden="true"></span>
+        <span class="gas-loading__text">처리 중...</span>
+      </div>
+    </div>
+
+    <script src="script.js?v=1.1" defer></script>
   </body>
 </html>
