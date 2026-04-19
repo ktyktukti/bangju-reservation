@@ -1746,16 +1746,13 @@
     const wrap = document.createElement('div')
     wrap.className = 'cal__day'
 
-    const banner = document.createElement('div')
-    banner.className = 'cal__day-banner'
-    banner.setAttribute('role', 'note')
-    banner.textContent = `현재일 기준 ${BOOKING_WINDOW_INCLUSIVE_DAYS}일(약 2주) 이내만 예약할 수 있습니다.`
-
     const scroll = document.createElement('div')
     scroll.className = 'cal__day-scroll'
 
     const curDay = startOfDay(state.cursor)
     const dateKey = dateKeyFromDate(curDay)
+    const beyondBookableWindow =
+      dateKey > lastBookableDayKeySeoul()
 
     const list = reservationsForPlace(state.selectedPlace)
       .filter((r) => reservationDateKeyForCompare(r.date) === dateKey)
@@ -1848,7 +1845,16 @@
     track.append(hoursBg, blocksLayer)
     pane.append(ruler, track)
     scroll.appendChild(pane)
-    wrap.append(banner, scroll)
+
+    if (beyondBookableWindow) {
+      const banner = document.createElement('div')
+      banner.className = 'cal__day-banner'
+      banner.setAttribute('role', 'note')
+      banner.textContent = `현재일 기준 ${BOOKING_WINDOW_INCLUSIVE_DAYS}일 이내만 예약할 수 있습니다.`
+      wrap.append(banner, scroll)
+    } else {
+      wrap.appendChild(scroll)
+    }
     return wrap
   }
 
