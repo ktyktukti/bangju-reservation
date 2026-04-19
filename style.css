@@ -1036,44 +1036,14 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* type="time": 모바일은 OS 휠/시트 피커, 데스크톱은 브라우저 UI */
+/* 시작(HH:mm 텍스트)·종료(select) 동일 숫자 폭 */
 .modal__input--time {
   font-variant-numeric: tabular-nums;
 }
 
-/* 읽기 전용 시작 시간 — 시계 아이콘·클릭으로 조정 막기 */
 .modal__input--time.modal__input--readonly {
   cursor: default;
   color: var(--text-secondary);
-}
-
-.modal__input--time.modal__input--readonly::-webkit-calendar-picker-indicator {
-  opacity: 0;
-  width: 0;
-  margin: 0;
-  padding: 0;
-  pointer-events: none;
-}
-
-.modal__input--time::-webkit-calendar-picker-indicator {
-  cursor: pointer;
-  opacity: 0.75;
-  padding: 0.35rem;
-  margin-left: 0.15rem;
-  border-radius: 6px;
-}
-
-.modal__input--time::-webkit-calendar-picker-indicator:hover {
-  opacity: 1;
-  background: rgba(0, 100, 0, 0.08);
-}
-
-@media (max-width: 640px) {
-  .modal__input--time::-webkit-calendar-picker-indicator {
-    padding: 0.55rem;
-    margin: -0.35rem -0.25rem -0.35rem 0.15rem;
-    transform: scale(1.15);
-  }
 }
 
 .modal__tilde {

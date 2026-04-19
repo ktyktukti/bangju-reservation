@@ -64,10 +64,9 @@
                 class="modal__input modal__select"
                 id="reservation-place"
                 name="place"
+                aria-label="예약 장소"
               >
-                <option value="다목적실">다목적실</option>
-                <option value="유아예배실 1">유아예배실 1</option>
-                <option value="유아예배실 2">유아예배실 2</option>
+                <!-- script.js: Config(LOCATIONS) 로드 후 옵션 채움 -->
               </select>
             </div>
           </div>
@@ -93,17 +92,16 @@
                 role="group"
                 aria-labelledby="reservation-time-label"
               >
+                <!-- 종료(select)와 동일하게 24시간 HH:mm 표기. type=time은 로캘별 오전/오후 표시로 어긋남 -->
                 <input
-                  type="time"
+                  type="text"
                   class="modal__input modal__input--time modal__input--readonly"
                   id="reservation-time-start"
                   name="timeStart"
-                  step="1800"
-                  min="08:00"
-                  max="22:00"
                   required
                   readonly
                   tabindex="-1"
+                  autocomplete="off"
                   aria-label="시작 시간 (달력에서 선택한 시간, 변경 불가)"
                 />
                 <span class="modal__tilde" aria-hidden="true">~</span>
@@ -412,6 +410,6 @@
       </div>
     </div>
 
-    <script src="script.js?v=1.4" defer></script>
+    <script src="script.js?v=1.8" defer></script>
   </body>
 </html>

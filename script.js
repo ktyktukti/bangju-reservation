@@ -9,24 +9,21 @@
   const DAY_VIEW_SLOT_STEP_MIN = 30
 
   /**
-   * 예약 한 건당 허용 최대 시간 길이(분).
-   * 교회 운영 정책이 바뀌면 이 숫자만 수정하면 됨(폼 검증·안내에 동일하게 적용).
-   * 예: 3시간 → 180, 2시간 → 120, 2시간 30분 → 150
+   * 예약 한 건당 허용 최대 시간(분). `fetchAppConfig()`로 시트 Config의 MAX_HOURS를 반영.
    */
-  const MAX_RESERVATION_SPAN_MINUTES = 180
+  let MAX_RESERVATION_SPAN_MINUTES = 180
 
   /**
-   * 예약 오픈 일수: 오늘(Asia/Seoul 달력)을 포함해 며칠간 신청 가능한지.
-   * 예: 14 → 오늘·내일 … 총 14일째 날까지 허용(마지막 날 = 오늘 + 13일).
-   * “2주만 오픈” 같은 정책이 바뀌면 이 숫자만 수정.
+   * 예약 오픈 일수. `fetchAppConfig()`로 시트 Config의 OPEN_DAYS를 반영.
    */
-  const BOOKING_WINDOW_INCLUSIVE_DAYS = 14
+  let BOOKING_WINDOW_INCLUSIVE_DAYS = 14
 
   /** 구글 Apps Script 웹 앱 (배포 URL) */
   const GAS_URL =
     'https://script.google.com/macros/s/AKfycbzwOLYwcfo74MOJ8mI13sw67X-gWwa6yzQS-7LklBGxqn-pr9I4snlV0PEcSV4biQ65Xg/exec'
 
-  const PLACES = ['다목적실', '유아예배실 1', '유아예배실 2']
+  /** 예약 가능 장소. `fetchAppConfig()`로 시트 Config의 LOCATIONS를 반영. */
+  let PLACES = ['다목적실', '유아예배실 1', '유아예배실 2']
 
   /** POST 본문: GAS가 JSON보다 잘 받는 형식과 동일하게 명시 */
   const GAS_CONTENT_TYPE_URLENC =
@@ -418,6 +415,149 @@
     return String(s ?? '')
       .trim()
       .replace(/\s+/g, ' ')
+  }
+
+  /** GAS `?mode=getConfig` → { maxHours, openDays, locations } */
+  async function gasFetchGetConfig() {
+    const u = new URL(GAS_URL)
+    u.searchParams.set('mode', 'getConfig')
+    u.searchParams.set('t', String(Date.now()))
+    const res = await fetch(u.toString(), {
+      method: 'GET',
+      redirect: 'follow',
+      mode: 'cors',
+      cache: 'no-store',
+      credentials: 'omit',
+      headers: {
+        Accept: 'application/json, text/plain, */*',
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache',
+      },
+    })
+    if (!res.ok) {
+      throw new Error(`[GAS] getConfig HTTP ${res.status}`)
+    }
+    const text = await res.text()
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch {
+      throw new Error('[GAS] getConfig JSON 파싱 실패')
+    }
+    if (!data || typeof data !== 'object') {
+      throw new Error('[GAS] getConfig 응답 형식 오류')
+    }
+    return data
+  }
+
+  /**
+   * fetch CORS 차단 시(로컬 127.0.0.1 등). GAS doGet에 `mode=getConfig&callback=` 지원 필요.
+   */
+  function gasGetConfigViaJsonp() {
+    return new Promise((resolve, reject) => {
+      const cbName = `__rrGasCfgJsonp_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
+      const script = document.createElement('script')
+      const timeoutMs = 25000
+      let settled = false
+      const t = setTimeout(() => {
+        finish(new Error('[GAS] getConfig JSONP 시간 초과'), null)
+      }, timeoutMs)
+
+      function finish(err, payload) {
+        if (settled) return
+        settled = true
+        clearTimeout(t)
+        try {
+          delete window[cbName]
+        } catch {
+          /* ignore */
+        }
+        if (script.parentNode) script.parentNode.removeChild(script)
+        if (err) reject(err)
+        else resolve(payload)
+      }
+
+      window[cbName] = function (data) {
+        finish(null, data)
+      }
+
+      script.onerror = () =>
+        finish(new Error('[GAS] getConfig JSONP 스크립트 로드 실패'), null)
+
+      const u = new URL(GAS_URL)
+      u.searchParams.set('mode', 'getConfig')
+      u.searchParams.set('callback', cbName)
+      u.searchParams.set('t', String(Date.now()))
+      script.src = u.toString()
+      document.head.appendChild(script)
+    })
+  }
+
+  /** Config 시트 값 적용. 실패 시 하드코딩 기본값 유지. */
+  async function fetchAppConfig() {
+    try {
+      let cfg
+      try {
+        cfg = await gasFetchGetConfig()
+      } catch (fetchErr) {
+        if (isLikelyFetchBlockedError(fetchErr)) {
+          console.warn('[GAS] getConfig fetch 실패 — JSONP 재시도', fetchErr)
+          cfg = await gasGetConfigViaJsonp()
+        } else {
+          throw fetchErr
+        }
+      }
+      if (!cfg || typeof cfg !== 'object') {
+        throw new Error('[GAS] getConfig 응답 형식 오류')
+      }
+      const h = Number(cfg.maxHours)
+      if (!Number.isNaN(h) && h >= 1 && h <= 24) {
+        MAX_RESERVATION_SPAN_MINUTES = Math.round(h * 60)
+      }
+      const d = Number(cfg.openDays)
+      if (!Number.isNaN(d) && d >= 1 && d <= 366) {
+        BOOKING_WINDOW_INCLUSIVE_DAYS = Math.floor(d)
+      }
+      if (Array.isArray(cfg.locations) && cfg.locations.length > 0) {
+        PLACES.length = 0
+        cfg.locations.forEach((x) => {
+          const s = String(x ?? '').trim()
+          if (s) PLACES.push(s)
+        })
+      }
+      if (!PLACES.length) {
+        PLACES.push('다목적실', '유아예배실 1', '유아예배실 2')
+      }
+      if (!PLACES.includes(state.selectedPlace)) {
+        state.selectedPlace = PLACES[0]
+      }
+      refillReservationPlaceSelect()
+      return true
+    } catch (err) {
+      console.warn('[GAS] Config 불러오기 실패 — 기본값 사용', err)
+      return false
+    }
+  }
+
+  function refillReservationPlaceSelect() {
+    if (!selectPlace) return
+    const prev = selectPlace.value
+    selectPlace.innerHTML = ''
+    PLACES.forEach((p) => {
+      const o = document.createElement('option')
+      o.value = p
+      o.textContent = p
+      selectPlace.appendChild(o)
+    })
+    if (PLACES.includes(prev)) selectPlace.value = prev
+    else selectPlace.selectedIndex = 0
+  }
+
+  function refreshReservationTimeHint() {
+    const el = document.getElementById('reservation-time-hint')
+    if (el) {
+      el.textContent = `시작은 달력에서 고른 시간으로 고정 · 종료만 아래에서 선택(30분 단위) · 최대 ${maxReservationSpanLabelKo()}`
+    }
   }
 
   /** 달력·목록은 GAS doGet만 사용 (비밀번호 미포함 응답 가정). fetch 실패 시 JSONP 폴백. */
@@ -1237,7 +1377,7 @@
     const dayKeyModal = dateKeyFromDate(modalAnchorDate)
     if (!isYmdInBookableWindow(dayKeyModal)) {
       alert(
-        `예약은 오늘부터 ${BOOKING_WINDOW_INCLUSIVE_DAYS}일(약 2주) 이내 날짜만 가능합니다.`,
+        `예약은 오늘부터 ${BOOKING_WINDOW_INCLUSIVE_DAYS}일 이내 날짜만 가능합니다.`,
       )
       return
     }
@@ -1253,7 +1393,7 @@
     if (!slotAvail.ok) {
       alert(
         slotAvail.reason === 'future'
-          ? `예약은 오늘부터 ${BOOKING_WINDOW_INCLUSIVE_DAYS}일(약 2주) 이내만 가능합니다.`
+          ? `예약은 오늘부터 ${BOOKING_WINDOW_INCLUSIVE_DAYS}일 이내만 가능합니다.`
           : '이미 지난 일자·시간에는 예약할 수 없습니다.',
       )
       return
@@ -1346,7 +1486,7 @@
 
       if (!isYmdInBookableWindow(dateIso)) {
         alert(
-          `예약 가능 기간이 아닙니다. 오늘부터 ${BOOKING_WINDOW_INCLUSIVE_DAYS}일(약 2주) 이내만 선택해 주세요.`,
+          `예약 가능 기간이 아닙니다. 오늘부터 ${BOOKING_WINDOW_INCLUSIVE_DAYS}일 이내만 선택해 주세요.`,
         )
         return
       }
@@ -1596,7 +1736,13 @@
       return sheetReservations.slice()
     },
     async refreshFromSheet() {
-      await fetchSheetReservations()
+      await Promise.all([fetchAppConfig(), fetchSheetReservations()])
+      refreshReservationTimeHint()
+      render()
+    },
+    async reloadConfig() {
+      await fetchAppConfig()
+      refreshReservationTimeHint()
       render()
     },
     getGasUrl() {
@@ -1604,9 +1750,17 @@
     },
   }
 
-  const timeHintEl = document.getElementById('reservation-time-hint')
-  if (timeHintEl) {
-    timeHintEl.textContent = `시작은 달력에서 고른 시간으로 고정 · 종료만 아래에서 선택(30분 단위) · 최대 ${maxReservationSpanLabelKo()}`
+  refillReservationPlaceSelect()
+  refreshReservationTimeHint()
+
+  /** 예약자·소속·연락처·사용목적 비어 있으면 한글 라벨 배열 */
+  function getMissingReservationFieldLabels() {
+    const missing = []
+    if (!String(inputName?.value ?? '').trim()) missing.push('예약자')
+    if (!String(inputAffiliation?.value ?? '').trim()) missing.push('소속')
+    if (!String(inputPhone?.value ?? '').trim()) missing.push('연락처')
+    if (!String(inputPurpose?.value ?? '').trim()) missing.push('사용목적')
+    return missing
   }
 
   if (
@@ -1652,6 +1806,12 @@
         return
       }
 
+      const missingLabels = getMissingReservationFieldLabels()
+      if (missingLabels.length > 0) {
+        alert(`다음 항목을 입력해 주세요.\n\n• ${missingLabels.join('\n• ')}`)
+        return
+      }
+
       if (reservationFormMode === 'edit') {
         const isoEdit = dotDateToISO(inputDate.value)
         if (!isoEdit) {
@@ -1666,7 +1826,7 @@
       const isoCheck = dotDateToISO(inputDate.value)
       if (!isoCheck || !isYmdInBookableWindow(isoCheck)) {
         alert(
-          `예약 가능 기간이 아닙니다. 오늘부터 ${BOOKING_WINDOW_INCLUSIVE_DAYS}일(약 2주) 이내만 선택해 주세요.`,
+          `예약 가능 기간이 아닙니다. 오늘부터 ${BOOKING_WINDOW_INCLUSIVE_DAYS}일 이내만 선택해 주세요.`,
         )
         return
       }
@@ -1674,7 +1834,7 @@
       if (!slotCk.ok) {
         alert(
           slotCk.reason === 'future'
-            ? `예약은 오늘부터 ${BOOKING_WINDOW_INCLUSIVE_DAYS}일(약 2주) 이내만 가능합니다.`
+            ? `예약은 오늘부터 ${BOOKING_WINDOW_INCLUSIVE_DAYS}일 이내만 가능합니다.`
             : '이미 지난 일자·시간에는 예약할 수 없습니다.',
         )
         return
@@ -2093,7 +2253,7 @@
         if (!ck.ok) {
           alert(
             ck.reason === 'future'
-              ? `예약은 오늘부터 ${BOOKING_WINDOW_INCLUSIVE_DAYS}일(약 2주) 이내만 가능합니다.`
+              ? `예약은 오늘부터 ${BOOKING_WINDOW_INCLUSIVE_DAYS}일 이내만 가능합니다.`
               : '이미 지난 일자·시간에는 예약할 수 없습니다.',
           )
           return
@@ -2162,7 +2322,8 @@
   }
 
   void (async function init() {
-    await fetchSheetReservations()
+    await Promise.all([fetchAppConfig(), fetchSheetReservations()])
+    refreshReservationTimeHint()
     render()
   })()
 })()

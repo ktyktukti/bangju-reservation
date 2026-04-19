@@ -3,6 +3,8 @@
 // ==========================================
 var ADMIN_PASSWORD = "우리교회관리자123"; // 실제 사용할 관리자 비번으로 수정
 var DB_SHEET_NAME = "Reserve_DB"; // 시트 탭 이름 확인
+/** Key / Value / 설명 형식 — MAX_HOURS, OPEN_DAYS, LOCATIONS */
+var CONFIG_SHEET_NAME = "Config";
 
 // ==========================================
 // CORS: 브라우저 fetch용 (런타임 미지원 시 무시)
@@ -54,6 +56,78 @@ function endTimeToHHmm_(cellVal, tzStr) {
     return Utilities.formatDate(cellVal, tzStr, "HH:mm");
   }
   return String(cellVal != null ? cellVal : "");
+}
+
+/** Config 시트 기본값(Key 컬럼 매칭 실패 시) */
+var CONFIG_DEFAULTS_ = {
+  maxHours: 3,
+  openDays: 14,
+  locations: ["다목적실", "유아예배실 1", "유아예배실 2"],
+};
+
+/**
+ * Config 시트에서 설정 로드 (열 A=Key, B=Value).
+ * 반환: { maxHours: number, openDays: number, locations: string[] }
+ */
+function getConfig_() {
+  var out = {
+    maxHours: CONFIG_DEFAULTS_.maxHours,
+    openDays: CONFIG_DEFAULTS_.openDays,
+    locations: CONFIG_DEFAULTS_.locations.slice(),
+  };
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sh = ss.getSheetByName(CONFIG_SHEET_NAME);
+    if (!sh) return out;
+    var data = sh.getDataRange().getValues();
+    for (var r = 1; r < data.length; r++) {
+      var key = String(data[r][0] || "").trim();
+      var val = data[r][1];
+      if (key === "MAX_HOURS") {
+        var h = parseInt(val, 10);
+        if (!isNaN(h) && h >= 1 && h <= 24) out.maxHours = h;
+      } else if (key === "OPEN_DAYS") {
+        var d = parseInt(val, 10);
+        if (!isNaN(d) && d >= 1 && d <= 366) out.openDays = d;
+      } else if (key === "LOCATIONS") {
+        var list = String(val || "")
+          .split(/[,，、]/)
+          .map(function (s) {
+            return String(s).trim();
+          })
+          .filter(function (s) {
+            return s.length > 0;
+          });
+        if (list.length > 0) out.locations = list;
+      }
+    }
+  } catch (ignore) {}
+  return out;
+}
+
+/** 편집기 실행·테스트용 */
+function getConfig() {
+  return getConfig_();
+}
+
+/** 신규 예약·수정 시 최대 허용 길이(분) */
+function maxReservationSpanMinutes_() {
+  var c = getConfig_();
+  var h = Number(c.maxHours);
+  if (isNaN(h) || h < 1) h = CONFIG_DEFAULTS_.maxHours;
+  if (h > 24) h = 24;
+  return Math.round(h * 60);
+}
+
+/** 신규 저장 시 장소가 Config 목록에 있는지 */
+function placeAllowed_(placeStr) {
+  var cfg = getConfig_();
+  var p = String(placeStr || "").trim();
+  var locs = cfg.locations || [];
+  for (var i = 0; i < locs.length; i++) {
+    if (String(locs[i]).trim() === p) return true;
+  }
+  return false;
 }
 
 /** 브라우저가 POST 전에 보내는 OPTIONS(프리플라이트) 처리 */
@@ -176,6 +250,13 @@ function doPost(e) {
           )
         );
       }
+      if (newEndMin - startMin > maxReservationSpanMinutes_()) {
+        return withCors_(
+          ContentService.createTextOutput(
+            "Error: Exceeds max reservation span"
+          ).setMimeType(ContentService.MimeType.TEXT)
+        );
+      }
 
       var dateParam = "";
       if (
@@ -246,6 +327,13 @@ function doPost(e) {
 
     // --- [모드 D: 신규 예약 저장 (기본)] ---
     var placeNew = String(params.place || "").trim();
+    if (!placeAllowed_(placeNew)) {
+      return withCors_(
+        ContentService.createTextOutput("Error: Invalid place").setMimeType(
+          ContentService.MimeType.TEXT
+        )
+      );
+    }
     var dateNew = String(params.date || "").trim();
     var newStartMin = reservationTimeToMinutes_(params.startTime, tz);
     var newEndMin = reservationTimeToMinutes_(params.endTime, tz);
@@ -254,6 +342,13 @@ function doPost(e) {
         ContentService.createTextOutput("Error: Invalid time range").setMimeType(
           ContentService.MimeType.TEXT
         )
+      );
+    }
+    if (newEndMin - newStartMin > maxReservationSpanMinutes_()) {
+      return withCors_(
+        ContentService.createTextOutput(
+          "Error: Exceeds max reservation span"
+        ).setMimeType(ContentService.MimeType.TEXT)
       );
     }
     var isConflictNew = data.slice(1).some(function (row) {
@@ -312,6 +407,25 @@ function doPost(e) {
 // ==========================================
 function doGet(e) {
   e = e || {};
+  var p = e.parameter || {};
+  if (p.mode === "getConfig") {
+    var cfgOut = getConfig_();
+    var cbCfg = p.callback;
+    if (cbCfg) {
+      var cfgPayload = cbCfg + "(" + JSON.stringify(cfgOut) + ");";
+      return withCors_(
+        ContentService.createTextOutput(cfgPayload).setMimeType(
+          ContentService.MimeType.JAVASCRIPT
+        )
+      );
+    }
+    return withCors_(
+      ContentService.createTextOutput(JSON.stringify(cfgOut)).setMimeType(
+        ContentService.MimeType.JSON
+      )
+    );
+  }
+
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(DB_SHEET_NAME);
   if (!sheet) {
