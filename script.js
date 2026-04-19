@@ -5,6 +5,8 @@
   const DAY_START_MIN = SLOT_START * 60
   const DAY_END_MIN = SLOT_END * 60
   const DAY_TOTAL_MIN = DAY_END_MIN - DAY_START_MIN
+  /** 일 보기 빈 칸·눈금 간격 (분). 30이면 8:00, 8:30, … 클릭 가능 */
+  const DAY_VIEW_SLOT_STEP_MIN = 30
 
   /**
    * 예약 한 건당 허용 최대 시간 길이(분).
@@ -957,12 +959,14 @@
     modalAnchorDate = startOfDay(date)
     inputDate.value = formatDateDot(modalAnchorDate)
 
-    let sh = 9
-    if (typeof opt.startHour === 'number') {
-      sh = opt.startHour
+    let startTotalMin = 9 * 60
+    if (typeof opt.startTotalMin === 'number' && !Number.isNaN(opt.startTotalMin)) {
+      startTotalMin = opt.startTotalMin
+    } else if (typeof opt.startHour === 'number') {
+      startTotalMin = opt.startHour * 60
     }
 
-    inputTimeStart.value = snapToHalfHourSlot(valueFromMinutes(sh * 60))
+    inputTimeStart.value = snapToHalfHourSlot(valueFromMinutes(startTotalMin))
     fillReservationEndSelect()
 
     inputName.value = ''
@@ -1609,10 +1613,14 @@
 
     const ruler = document.createElement('div')
     ruler.className = 'cal__day-ruler'
-    for (let h = SLOT_START; h < SLOT_END; h += 1) {
+    for (
+      let m = DAY_START_MIN;
+      m < DAY_END_MIN;
+      m += DAY_VIEW_SLOT_STEP_MIN
+    ) {
       const lab = document.createElement('div')
       lab.className = 'cal__day-ruler-hour'
-      lab.textContent = `${String(h).padStart(2, '0')}:00`
+      lab.textContent = valueFromMinutes(m)
       ruler.appendChild(lab)
     }
 
@@ -1621,15 +1629,20 @@
 
     const hoursBg = document.createElement('div')
     hoursBg.className = 'cal__day-hours-bg'
-    for (let h = SLOT_START; h < SLOT_END; h += 1) {
+    for (
+      let m = DAY_START_MIN;
+      m < DAY_END_MIN;
+      m += DAY_VIEW_SLOT_STEP_MIN
+    ) {
       const slot = document.createElement('button')
       slot.type = 'button'
       slot.className = 'cal__day-hour-empty'
-      slot.dataset.hour = String(h)
-      slot.setAttribute('aria-label', `${h}시 새 예약`)
+      slot.dataset.startMin = String(m)
+      const label = valueFromMinutes(m)
+      slot.setAttribute('aria-label', `${label} 새 예약`)
       slot.addEventListener('click', () => {
         state.cursor = startOfDay(state.cursor)
-        openReservationModal(state.cursor, { startHour: h })
+        openReservationModal(state.cursor, { startTotalMin: m })
       })
       hoursBg.appendChild(slot)
     }
